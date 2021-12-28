@@ -11,26 +11,57 @@ import threading
 
 ticker = ['SOL','EOS','XRP','DOGE','BTT','ADA','SAND']
 
-class MonitoringKP(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-        # self.cycle = 60 * 2
-        self.cycle = 5
-
-    def run(self):
-        
-        upbit_ticker = [] 
-        binance_ticker = []
-
-        for i in ticker:
+# changing ticker name for exchange market
+upbit_ticker = [] 
+binance_ticker = []
+for i in ticker:
             upbit_ticker.append('KRW-'+i)
             binance_ticker.append(i+'/USDT')
 
+class MonitoringKP(threading.Thread):
+    def __init__(self):
+        threading.Thread.__init__(self)
+        self.cycle = 60 * 2
+        # self.cycle = 5
+
+    def run(self):   
+        binance = ccxt.binance()
         while True:
             time.sleep(self.cycle)
             debug('kimchi premium monitoring', 1)
-           
+
+            # recv binance price
+            binance_pirce = binance.fetch_tickers(binance_ticker)
+
+            # recv upbit price
+            upbit_price = pyupbit.get_current_price(upbit_ticker)
+            # print(upbit_price)
+            # print(upbit_price['KRW-SOL'])
+
+            # calculate kimchi premium
+            e = get_exchange_rate() # 현재환율
+
+            kp = {}
+            message = 'kimchi premium monitoring\n'
+            for i in ticker:
+                binance_pirce_krw = binance_pirce[i+'/USDT']['close'] * e         # binance margin values for KRW
+                kp[i] = upbit_price['KRW-'+i] / binance_pirce_krw * 100 - 100     # calc kp
+
+            # find max, min kp
+            all_values = kp.values()
+            max_values = max(all_values)
+            min_values = min(all_values)
+            max_token = find_key(kp, max_values)
+            min_token = find_key(kp, min_values)
+            message += 'o max kp[%s] : %s\n'%(max_token, round(max_values, 3))
+            message += 'o min kp[%s] : %s\n'%(min_token, round(min_values, 3))
+            message += 'o cal kp : %s\n'%(round(max_values-min_values, 3))
+            print(message)
+            send_message(message)
     
+
+def find_key(dict, val):
+        return next(key for key, value in dict.items() if value == val)
 
 
 # hedge monitoring
@@ -69,62 +100,7 @@ bot = telegram.Bot(token=telegram_token)
 def send_message(text):
     bot.sendMessage(telegram_chatid, text=text)
 
-
-
-# recv marketpice method
 def Autoplay():
-    # ticker = ['SOL','EOS','XRP','DOGE','BTT','ADA','SAND']
-    # upbit_ticker = ['KRW-SOL','KRW-EOS','KRW-XRP','KRW-DOGE','KRW-BTT','KRW-ADA','KRW-SAND']
-    # binance_ticker = ['SOL/USDT','EOS/USDT','XRP/USDT','DOGE/USDT','BTT/USDT','ADA/USDT','SAND/USDT']
-    
-    # change_ticker_name 
-    upbit_ticker = [] 
-    binance_ticker = []
-    for i in ticker:
-        upbit_ticker.append('KRW-'+i)
-        binance_ticker.append(i+'/USDT')
-
-    # recv binance price
-    binance = ccxt.binance()
-    binance_pirce = binance.fetch_tickers(binance_ticker)
-
-    # recv upbit price
-    upbit_price = pyupbit.get_current_price(upbit_ticker)
-    # print(upbit_price)
-    # print(upbit_price['KRW-SOL'])
-
-
-    def find_key(dict, val):
-        return next(key for key, value in dict.items() if value == val)
-
-
-    # calculate kimchi premium
-    e = get_exchange_rate() # 현재환율
-
-    kp = {}
-    # message = "token\t\tupbit\t\tbinance\t\tkp\n"
-    message = "token\t\tkp\n"
-
-    for i in ticker:
-
-        binance_pirce_krw = binance_pirce[i+'/USDT']['close'] * e         # binance margin values for KRW
-        kp[i] = upbit_price['KRW-'+i] / binance_pirce_krw * 100 - 100     # calc kp
-
-        # message += "%s\t\t%s\t\t%s\t\t%s\n"%(i, upbit_price['KRW-'+i], round(binance_pirce_krw, 2), kp[i])
-        # message += "%s\t%s\n"%(i, kp[i])
-
-    # find fp max, min
-    all_values = kp.values()
-    max_values = max(all_values)
-    min_values = min(all_values)
-    max_token = find_key(kp, max_values)
-    min_token = find_key(kp, min_values)
-    message += '\nmax kp[%s] : %s\n'%(max_token, max_values)
-    message += 'min kp[%s] : %s\n'%(min_token, min_values)
-    message += 'cal kp : %s\n'%(max_values-min_values)
-    print(message)
-    send_message(message)
-
 
     # exchanged fee(%)
     upbit_fee = 0.05
